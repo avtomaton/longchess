@@ -52,20 +52,40 @@ class Words:
 words = Words()
 
 
-def start(bot, update):
-    global words
-    words = Words("распатронка")
-    bot.send_message(chat_id=update.message.chat_id, text="We use word '" + words.long_word + "'")
-    bot.send_message(chat_id=update.message.chat_id, text="Hey there, let's talk")
-
-
 def need_help(bot, update):
-    bot.send_message(chat_id=update.message.chat_id, text='/start: start the game\n/word: new word')
+    bot.send_message(chat_id=update.message.chat_id,
+                     text='/start: start the conversation with me\n'
+                          '/help: print this message\n'
+                          '/game <word>: start a new game\n'
+                          '/word <word>: new word\n'
+                          '/scores: print current scores\n'
+                          '\nOr just text me, I am very friendly')
 
 
-def word(bot, update):
-    bot.send_message(chat_id=update.message.chat_id, text='I got it.')
-    bot.send_message(chat_id=update.message.chat_id, text='Just kidding, I am still not so smart =)')
+def start(bot, update):
+    bot.send_message(chat_id=update.message.chat_id,
+                     text="Hey there, let's talk!")
+    need_help(bot, update)
+
+
+def game(bot, update, args):
+    global words
+    try:
+        words = Words(args[0])
+        bot.send_message(chat_id=update.message.chat_id,
+                         text="Let's rock! "
+                              "We use word '" + words.long_word + "'")
+    except (IndexError, ValueError):
+        update.message.reply_text("Usage: /game <word>")
+
+
+def word(bot, update, args):
+    global words
+    try:
+        words.add_word(args[0], update.message.from_user)
+        bot.send_message(chat_id=update.message.chat_id, text=words.message)
+    except (IndexError, ValueError):
+        update.message.reply_text("Usage: /word <word>")
 
 
 def scores(bot, update):
@@ -73,12 +93,8 @@ def scores(bot, update):
     bot.send_message(chat_id=update.message.chat_id, text=words.scores())
 
 
-def echo(bot, update):
-    global words
-    # bot.send_message(chat_id=update.message.chat_id, text=update.message.text)
+def blah_blah(bot, update):
     bot.send_message(chat_id=update.message.chat_id, text='blah-blah-blah')
-    words.add_word(update.message.text, update.message.from_user)
-    bot.send_message(chat_id=update.message.chat_id, text=words.message)
 
 
 def mention(bot, update):
@@ -98,23 +114,21 @@ def error(bot, update, error):
     # logger.warning('Update "%s" caused error "%s"', update, error)
 
 
-start_handler = CommandHandler('start', start)
-help_handler = CommandHandler('help', need_help)
-word_handler = CommandHandler('word', word)
-scores_handler = CommandHandler('scores', scores)
-echo_handler = MessageHandler(Filters.text, echo)
-mention_handler = MessageHandler(Filters.entity('mention'), mention)
-hashtag_handler = MessageHandler(Filters.entity('hashtag'), hashtag)
-unknown_command_handler = MessageHandler(Filters.command, unknown_command)
+handlers = [CommandHandler('start', start),
+            CommandHandler('help', need_help),
+            CommandHandler('game', game, pass_args=True),
+            CommandHandler('word', word, pass_args=True),
+            CommandHandler('scores', scores),
+            MessageHandler(Filters.command, unknown_command),
+            MessageHandler(Filters.entity('mention'), mention),
+            MessageHandler(Filters.entity('hashtag'), hashtag),
+            MessageHandler(Filters.text, blah_blah)
+            ]
+
 dispatcher.add_error_handler(error)
-dispatcher.add_handler(start_handler)
-dispatcher.add_handler(help_handler)
-dispatcher.add_handler(word_handler)
-dispatcher.add_handler(scores_handler)
-dispatcher.add_handler(mention_handler)
-dispatcher.add_handler(hashtag_handler)
-dispatcher.add_handler(echo_handler)
-dispatcher.add_handler(unknown_command_handler)
+
+for h in handlers:
+    dispatcher.add_handler(h)
 
 updater.start_polling()
 updater.idle()

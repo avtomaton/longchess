@@ -19,11 +19,38 @@ class Words:
         self.long_word = long_word
         self.words = []
         self.message = '0_o'
-        self.users = {}
+        self.users = []
+        self.scores = {}  # telegram.User : score
+        self.can_add_user = True
+        self.current_user = -1
 
     def add_word(self, word, user):
-        if user not in self.users:
-            self.users[user] = 0
+        if user not in self.scores:
+            if self.can_add_user:
+                self.users.append(user)
+                self.current_user += 1
+                self.scores[user] = 0
+            else:
+                self.message = "I'm sorry, but it seems that the game " \
+                               "is already in progress now. If you want to " \
+                               "join, consider starting a new game"
+                return
+        else:
+            next_user = (self.current_user + 1) % len(self.users)
+            if len(self.users) == 1:
+                self.message = "Single player is not supported yet, " \
+                               "somebody else should make a turn"
+                return
+            elif user != self.users[next_user]:
+                self.message =\
+                    "Not so fast, " + user.username + "! " \
+                    "Now it is " + self.users[next_user].username + "'s turn!"
+                return
+            else:
+                # some existing user is making a correct turn, cannot add more users
+                self.can_add_user = False
+                self.current_user = next_user
+
         if word in self.words:
             self.message = "'" + word + "' was already used"
             return
@@ -36,15 +63,15 @@ class Words:
                 valid = False
                 break
         if valid:
-            self.users[user] += len(word)
             self.words.append(word)
+            self.scores[user] += len(word)
             self.message = 'OK, got it'
         else:
             self.message = "'" + word + "' cannot be used"
 
     def scores(self):
         self.message = ''
-        for user, score in self.users.items():
+        for user, score in self.scores.items():
             self.message += user.username + ': ' + str(score) + '\n'
         return self.message
 

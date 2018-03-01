@@ -2,7 +2,6 @@ from telegram.ext import Updater
 from telegram.ext import CommandHandler
 from telegram.ext import MessageHandler
 from telegram.ext import Filters
-import telegram
 
 import logging
 
@@ -12,6 +11,7 @@ updater = Updater(token=chess_token)
 dispatcher = updater.dispatcher
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+
 
 class Words:
 
@@ -47,8 +47,10 @@ class Words:
         for user, score in self.users.items():
             self.message += user.username + ': ' + str(score) + '\n'
         return self.message
-            
+
+
 words = Words()
+
 
 def start(bot, update):
     global words
@@ -56,36 +58,44 @@ def start(bot, update):
     bot.send_message(chat_id=update.message.chat_id, text="We use word '" + words.long_word + "'")
     bot.send_message(chat_id=update.message.chat_id, text="Hey there, let's talk")
 
+
 def need_help(bot, update):
     bot.send_message(chat_id=update.message.chat_id, text='/start: start the game\n/word: new word')
+
 
 def word(bot, update):
     bot.send_message(chat_id=update.message.chat_id, text='I got it.')
     bot.send_message(chat_id=update.message.chat_id, text='Just kidding, I am still not so smart =)')
 
+
 def scores(bot, update):
     global words
     bot.send_message(chat_id=update.message.chat_id, text=words.scores())
 
+
 def echo(bot, update):
     global words
-    #bot.send_message(chat_id=update.message.chat_id, text=update.message.text)
+    # bot.send_message(chat_id=update.message.chat_id, text=update.message.text)
     bot.send_message(chat_id=update.message.chat_id, text='blah-blah-blah')
     words.add_word(update.message.text, update.message.from_user)
     bot.send_message(chat_id=update.message.chat_id, text=words.message)
 
+
 def mention(bot, update):
     bot.send_message(chat_id=update.message.chat_id, text="You mentioned someone")
+
 
 def hashtag(bot, update):
     bot.send_message(chat_id=update.message.chat_id, text="Hashtag?!")
 
+
 def unknown_command(bot, update):
     bot.send_message(chat_id=update.message.chat_id, text="Sorry, I didn't understand that command.")
 
+
 def error(bot, update, error):
     bot.send_message(chat_id=update.message.chat_id, text="Error (DEBUG MODE ENABLED).")
-    #logger.warning('Update "%s" caused error "%s"', update, error)
+    # logger.warning('Update "%s" caused error "%s"', update, error)
 
 
 start_handler = CommandHandler('start', start)

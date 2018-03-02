@@ -95,6 +95,7 @@ class Words:
         self.message = 'Used words:'
         for w in self.words:
             self.message += '\n' + w
+        return self.message
 
 
 chats = {}

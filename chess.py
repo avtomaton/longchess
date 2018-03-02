@@ -123,7 +123,13 @@ def start(bot, update):
 def game(bot, update, args):
     global chats
     try:
-        chats[update.message.chat_id] = Words(args[0].lower())
+        # use 0-th arg if we don't have space between slach and command name
+        # and 1-th otherwise
+        if update.message.text.split()[0] != '/':
+            param = args[0].lower()
+        else:
+            param = args[1].lower()
+        chats[update.message.chat_id] = Words(param)
         words = chats[update.message.chat_id]
         bot.send_message(chat_id=update.message.chat_id,
                          text="Let's rock! We use word '" + words.long_word + "'")
@@ -134,8 +140,14 @@ def game(bot, update, args):
 def word(bot, update, args):
     global chats
     try:
+        # use 0-th arg if we don't have space between slach and command name
+        # and 1-th otherwise
+        if update.message.text.split()[0] != '/':
+            param = args[0].lower()
+        else:
+            param = args[1].lower()
         words = chats[update.message.chat_id]
-        words.add_word(args[0].lower(), update.message.from_user)
+        words.add_word(param, update.message.from_user)
         bot.send_message(chat_id=update.message.chat_id, text=words.message)
     except KeyError:
         update.message.reply_text(

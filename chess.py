@@ -35,6 +35,7 @@ class Words:
         if self.long_word is None:
             self.message = "You should start a new game before entering words!"
             return
+        updated_user_idx = None
         if user not in self.scores:
             if self.can_add_user:
                 self.users.append(user)
@@ -60,7 +61,7 @@ class Words:
             else:
                 # some existing user is making a correct turn, cannot add more users
                 self.can_add_user = False
-                self.current_user = next_user
+                updated_user_idx = next_user
 
         if word in self.words:
             self.message = "'" + word + "' was already used"
@@ -77,6 +78,8 @@ class Words:
             self.words.append(word)
             self.scores[user] += len(word)
             self.message = lw + ": OK, added '" + word + "' (" + str(len(word)) + ")"
+            if updated_user_idx:
+                self.current_user = updated_user_idx
         else:
             self.message = "'" + word + "' cannot be used"
 

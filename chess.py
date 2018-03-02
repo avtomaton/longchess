@@ -87,7 +87,7 @@ class Words:
         return self.message
 
 
-words = Words()
+chats = {}
 
 
 def need_help(bot, update):
@@ -109,28 +109,30 @@ def start(bot, update):
 
 
 def game(bot, update, args):
-    global words
+    global chats
     try:
-        words = Words(args[0])
+        chats[update.message.chat_id] = Words(args[0].lower())
+        words = chats[update.message.chat_id]
         bot.send_message(chat_id=update.message.chat_id,
-                         text="Let's rock! "
-                              "We use word '" + words.long_word + "'")
+                         text="Let's rock! We use word '" + words.long_word + "'")
     except (IndexError, ValueError):
         update.message.reply_text("Usage: /game <word>")
 
 
 def word(bot, update, args):
-    global words
+    global chats
     try:
-        words.add_word(args[0], update.message.from_user)
+        words = chats[update.message.chat_id]
+        words.add_word(args[0].lower(), update.message.from_user)
         bot.send_message(chat_id=update.message.chat_id, text=words.message)
     except (IndexError, ValueError):
         update.message.reply_text("Usage: /word <word>")
 
 
 def scores(bot, update):
-    global words
-    bot.send_message(chat_id=update.message.chat_id, text=words.scores())
+    global chats
+    bot.send_message(chat_id=update.message.chat_id,
+                     text=chats[update.message.chat_id].scores())
 
 
 def blah_blah(bot, update):

@@ -76,7 +76,7 @@ class Words:
         if valid:
             self.words.append(word)
             self.scores[user] += len(word)
-            self.message = 'OK, got it'
+            self.message = lw + ": OK, added '" + word + "' (" + str(len(word)) + ")"
         else:
             self.message = "'" + word + "' cannot be used"
 
@@ -92,7 +92,7 @@ chats = {}
 
 def need_help(bot, update):
     bot.send_message(chat_id=update.message.chat_id,
-                     text='/start: start the conversation with me\n'
+                     text='/start: start talking/gaming with me\n'
                           '/help: print this message\n'
                           '/game <word>: start a new game\n'
                           '/word <word>: new word\n'

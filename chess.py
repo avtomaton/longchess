@@ -5,7 +5,7 @@ from telegram.ext import Filters
 
 import logging
 
-chess_token='461221539:AAF-Fa1r8WcrtC1N4GAoVUE38Vz047xvXuo'
+chess_token = open('telegram_token').readline().strip()
 
 updater = Updater(token=chess_token)
 dispatcher = updater.dispatcher

@@ -16,6 +16,8 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 class Words:
 
     def __init__(self, long_word=None):
+        self.max_steps = 20
+
         self.long_word = long_word
         self.words = []
         self.message = '0_o'
@@ -89,6 +91,11 @@ class Words:
             self.message += self.readable_name(user) + ': ' + str(score) + '\n'
         return self.message
 
+    def get_words(self):
+        self.message = 'Used words:'
+        for w in self.words:
+            self.message += '\n' + w
+
 
 chats = {}
 
@@ -102,6 +109,7 @@ def need_help(bot, update):
                           '/слово <слово>: предложить слово\n'
                           '/с <слово>: предложить слово\n'
                           '/scores: print current scores\n'
+                          '/used: print all used words'
                           '\nOr just text me, I am very friendly')
 
 
@@ -145,6 +153,16 @@ def scores(bot, update):
             "You should start a new game before checking scores!")
 
 
+def used_words(bot, update):
+    global chats
+    try:
+        words = chats[update.message.chat_id]
+        bot.send_message(chat_id=update.message.chat_id, text=words.get_words())
+    except KeyError:
+        update.message.reply_text(
+            "You should start a new game before checking used words!")
+
+
 def blah_blah(bot, update):
     bot.send_message(chat_id=update.message.chat_id, text='blah-blah-blah')
 
@@ -174,6 +192,7 @@ handlers = [CommandHandler('start', start),
             CommandHandler('с', word, pass_args=True),
             CommandHandler('c', word, pass_args=True),
             CommandHandler('scores', scores),
+            CommandHandler('used', used_words),
             MessageHandler(Filters.command, unknown_command),
             MessageHandler(Filters.entity('mention'), mention),
             MessageHandler(Filters.entity('hashtag'), hashtag),

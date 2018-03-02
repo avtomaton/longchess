@@ -80,7 +80,7 @@ class Words:
         else:
             self.message = "'" + word + "' cannot be used"
 
-    def scores(self):
+    def get_scores(self):
         self.message = ''
         for user, score in self.scores.items():
             self.message += self.readable_name(user) + ': ' + str(score) + '\n'
@@ -125,14 +125,21 @@ def word(bot, update, args):
         words = chats[update.message.chat_id]
         words.add_word(args[0].lower(), update.message.from_user)
         bot.send_message(chat_id=update.message.chat_id, text=words.message)
+    except KeyError:
+        update.message.reply_text(
+            "You should start a new game before entering words!")
     except (IndexError, ValueError):
         update.message.reply_text("Usage: /word <word>")
 
 
 def scores(bot, update):
     global chats
-    bot.send_message(chat_id=update.message.chat_id,
-                     text=chats[update.message.chat_id].scores())
+    try:
+        words = chats[update.message.chat_id]
+        bot.send_message(chat_id=update.message.chat_id, text=words.get_scores())
+    except KeyError:
+        update.message.reply_text(
+            "You should start a new game before checking scores!")
 
 
 def blah_blah(bot, update):

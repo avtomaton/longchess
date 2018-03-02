@@ -43,7 +43,7 @@ class Words:
                 return
             elif user != self.users[next_user]:
                 self.message =\
-                    "Not so fast, " + user.username + "! " \
+                    "Not so fast, " + user.username + "! " +\
                     "Now it is " + self.users[next_user].username + "'s turn!"
                 return
             else:
@@ -85,6 +85,8 @@ def need_help(bot, update):
                           '/help: print this message\n'
                           '/game <word>: start a new game\n'
                           '/word <word>: new word\n'
+                          '/слово <слово>: предложить слово\n'
+                          '/с <слово>: предложить слово\n'
                           '/scores: print current scores\n'
                           '\nOr just text me, I am very friendly')
 
@@ -145,6 +147,9 @@ handlers = [CommandHandler('start', start),
             CommandHandler('help', need_help),
             CommandHandler('game', game, pass_args=True),
             CommandHandler('word', word, pass_args=True),
+            CommandHandler('слово', word, pass_args=True),
+            CommandHandler('с', word, pass_args=True),
+            CommandHandler('c', word, pass_args=True),
             CommandHandler('scores', scores),
             MessageHandler(Filters.command, unknown_command),
             MessageHandler(Filters.entity('mention'), mention),

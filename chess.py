@@ -24,7 +24,17 @@ class Words:
         self.can_add_user = True
         self.current_user = -1
 
+    @staticmethod
+    def readable_name(user):
+        if user.name:
+            return user.name
+        else:
+            return str(user.id)
+
     def add_word(self, word, user):
+        if self.long_word is None:
+            self.message = "You should start a new game before entering words!"
+            return
         if user not in self.scores:
             if self.can_add_user:
                 self.users.append(user)
@@ -42,9 +52,10 @@ class Words:
                                "somebody else should make a turn"
                 return
             elif user != self.users[next_user]:
+
                 self.message =\
-                    "Not so fast, " + user.username + "! " +\
-                    "Now it is " + self.users[next_user].username + "'s turn!"
+                    "Not so fast, " + self.readable_name(user) + "! " +\
+                    "Now it is " + self.readable_name(self.users[next_user]) + "'s turn!"
                 return
             else:
                 # some existing user is making a correct turn, cannot add more users
@@ -72,7 +83,7 @@ class Words:
     def scores(self):
         self.message = ''
         for user, score in self.scores.items():
-            self.message += user.username + ': ' + str(score) + '\n'
+            self.message += self.readable_name(user) + ': ' + str(score) + '\n'
         return self.message
 
 

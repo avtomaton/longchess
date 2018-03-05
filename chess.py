@@ -120,6 +120,16 @@ class Words:
 chats = {}
 
 
+def command_arg(text, args, index):
+    # use i-th arg if we don't have space between slash and command name
+    # and (i+1)-th otherwise
+    if text.split()[0] != '/':
+        param = args[index].lower()
+    else:
+        param = args[index + 1].lower()
+    return param
+
+
 def need_help(bot, update):
     bot.send_message(chat_id=update.message.chat_id,
                      text='/start: start talking/gaming with me\n'
@@ -141,12 +151,7 @@ def start(bot, update):
 def game(bot, update, args):
     global chats
     try:
-        # use 0-th arg if we don't have space between slach and command name
-        # and 1-th otherwise
-        if update.message.text.split()[0] != '/':
-            param = args[0].lower()
-        else:
-            param = args[1].lower()
+        param = command_arg(update.message.text, args, 0)
         chats[update.message.chat_id] = Words(param)
         words = chats[update.message.chat_id]
         bot.send_message(chat_id=update.message.chat_id,
@@ -158,12 +163,7 @@ def game(bot, update, args):
 def word(bot, update, args):
     global chats
     try:
-        # use 0-th arg if we don't have space between slach and command name
-        # and 1-th otherwise
-        if update.message.text.split()[0] != '/':
-            param = args[0].lower()
-        else:
-            param = args[1].lower()
+        param = command_arg(update.message.text, args, 0)
         words = chats[update.message.chat_id]
         words.add_word(param, update.message.from_user)
         bot.send_message(chat_id=update.message.chat_id, text=words.message)

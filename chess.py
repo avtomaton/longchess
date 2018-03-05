@@ -33,15 +33,33 @@ class Words:
         else:
             return str(user.id)
 
+    @staticmethod
+    def telegram_help():
+        return '/game <word>: start a new game\n' \
+               '/word <word>: new word\n' \
+               '/слово <слово>: предложить слово\n' \
+               '/с <слово>: предложить слово\n' \
+               '/scores: print current scores\n' \
+               '/used: print all used words\n' \
+               '/rules: правила игры'
+
+    @staticmethod
+    def rules():
+        return 'Правила игры:\n' \
+               'Смысл игры заключается в составлении слов из букв ' \
+               'некого изначального (желательно длинного) слова.\n' \
+               'Игроки ходят по очереди, предлагая свои слова. ' \
+               'Очки за ход начисляются по количеству букв в предложенном ' \
+               'игроком слове.'
+
     def add_word(self, word, user):
         if self.long_word is None:
             self.message = "You should start a new game before entering words!"
             return
-        updated_user_idx = None
+        next_user = None
         if user not in self.scores:
             if self.can_add_user:
                 self.users.append(user)
-                self.current_user += 1
                 self.scores[user] = 0
             else:
                 self.message = "I'm sorry, but it seems that the game " \
@@ -49,21 +67,21 @@ class Words:
                                "join, consider starting a new game"
                 return
         else:
+            # somebody made a turn, we should check turns order
             next_user = (self.current_user + 1) % len(self.users)
-            if len(self.users) == 1:
+            if len(self.users) == 1 and self.current_user == 0:
+                # only one user, and he has already made a turn
                 self.message = "Single player is not supported yet, " \
-                               "somebody else should make a turn"
+                               "somebody else should make a turn "
                 return
             elif user != self.users[next_user]:
-
-                self.message =\
-                    "Not so fast, " + self.readable_name(user) + "! " +\
+                self.message = \
+                    "Not so fast, " + self.readable_name(user) + "! " + \
                     "Now it is " + self.readable_name(self.users[next_user]) + "'s turn!"
                 return
-            else:
-                # some existing user is making a correct turn, cannot add more users
+            elif self.scores[user] > 0:
+                # some existing user is making his second turn, cannot add more users
                 self.can_add_user = False
-                updated_user_idx = next_user
 
         if word in self.words:
             self.message = "'" + word + "' was already used"
@@ -72,16 +90,17 @@ class Words:
         valid = True
         for l in word:
             if l in lw:
-                lw.replace(l, '0', 1)
+                lw = lw.replace(l, '0', 1)
             else:
                 valid = False
                 break
         if valid:
             self.words.append(word)
             self.scores[user] += len(word)
-            self.message = lw + ": OK, added '" + word + "' (" + str(len(word)) + ")"
-            if updated_user_idx:
-                self.current_user = updated_user_idx
+            self.message = self.long_word + ": OK, added '" +\
+                           word + "' (" + str(len(word)) + ")"
+            if next_user is not None:
+                self.current_user = next_user
         else:
             self.message = "'" + word + "' cannot be used"
 
@@ -105,13 +124,12 @@ def need_help(bot, update):
     bot.send_message(chat_id=update.message.chat_id,
                      text='/start: start talking/gaming with me\n'
                           '/help: print this message\n'
-                          '/game <word>: start a new game\n'
-                          '/word <word>: new word\n'
-                          '/слово <слово>: предложить слово\n'
-                          '/с <слово>: предложить слово\n'
-                          '/scores: print current scores\n'
-                          '/used: print all used words'
+                          + Words.telegram_help() +
                           '\nOr just text me, I am very friendly')
+
+
+def rules(bot, update):
+    bot.send_message(chat_id=update.message.chat_id, text=Words.rules())
 
 
 def start(bot, update):
@@ -193,7 +211,7 @@ def unknown_command(bot, update):
 
 
 def error(bot, update, error):
-    bot.send_message(chat_id=update.message.chat_id, text="Error (DEBUG MODE ENABLED).")
+    print('Update "%s" caused error "%s"', update, error)
     # logger.warning('Update "%s" caused error "%s"', update, error)
 
 
@@ -206,6 +224,7 @@ handlers = [CommandHandler('start', start),
             CommandHandler('c', word, pass_args=True),
             CommandHandler('scores', scores),
             CommandHandler('used', used_words),
+            CommandHandler('rules', rules),
             MessageHandler(Filters.command, unknown_command),
             MessageHandler(Filters.entity('mention'), mention),
             MessageHandler(Filters.entity('hashtag'), hashtag),
@@ -219,4 +238,3 @@ for h in handlers:
 
 updater.start_polling()
 updater.idle()
-

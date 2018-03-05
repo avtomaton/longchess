@@ -14,9 +14,10 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 
 
 class Words:
+    params_list = ['turns']
 
     def __init__(self, long_word=None):
-        self.max_steps = 20
+        self.max_turns = 20
 
         self.long_word = long_word
         self.words = []
@@ -41,7 +42,8 @@ class Words:
                '/с <слово>: предложить слово\n' \
                '/scores: print current scores\n' \
                '/used: print all used words\n' \
-               '/rules: правила игры'
+               '/rules: правила игры\n' \
+               '/set turns <number>: set game duration in turns (default is 20)'
 
     @staticmethod
     def rules():
@@ -116,6 +118,11 @@ class Words:
             self.message += '\n' + w
         return self.message
 
+    def set_turns(self, turns):
+        self.max_turns = int(turns)
+        self.message = 'OK, set ' + str(self.max_turns) + ' turns as a game duration'
+        return self.message
+
 
 chats = {}
 
@@ -158,6 +165,23 @@ def game(bot, update, args):
                          text="Let's rock! We use word '" + words.long_word + "'")
     except (IndexError, ValueError):
         update.message.reply_text("Usage: /game <word>")
+
+
+def set_game_param(bot, update, args):
+    try:
+        param = command_arg(update.message.text, args, 0)
+        if param not in Words.params_list:
+            raise IndexError
+        words = chats[update.message.chat_id]
+        param = command_arg(update.message.text, args, 1)
+        words.set_turns(param)
+        bot.send_message(chat_id=update.message.chat_id, text=words.message)
+    except (IndexError, ValueError):
+        update.message.reply_text("Wrong /set command format")
+        need_help(bot, update)
+    except KeyError:
+        update.message.reply_text('Game was not started, please start it '
+                                  'before setting parameters!')
 
 
 def word(bot, update, args):
@@ -225,6 +249,7 @@ handlers = [CommandHandler('start', start),
             CommandHandler('scores', scores),
             CommandHandler('used', used_words),
             CommandHandler('rules', rules),
+            CommandHandler('set', set_game_param, pass_args=True),
             MessageHandler(Filters.command, unknown_command),
             MessageHandler(Filters.entity('mention'), mention),
             MessageHandler(Filters.entity('hashtag'), hashtag),

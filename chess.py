@@ -13,19 +13,27 @@ dispatcher = updater.dispatcher
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
 
+class UserData:
+    def __init__(self):
+        self.score = 0
+        self.turns = 0
+        self.index = 0  # user index in round
+
+
 class Words:
     params_list = ['turns']
 
     def __init__(self, long_word=None):
-        self.max_turns = 20
+        self.max_turns = 10
 
         self.long_word = long_word
         self.words = []
         self.message = '0_o'
         self.users = []
-        self.scores = {}  # telegram.User : score
+        self.scores = {}  # telegram.User : UserData
         self.can_add_user = True
         self.current_user = -1
+        self.over = False
 
     @staticmethod
     def readable_name(user):
@@ -43,7 +51,7 @@ class Words:
                '/scores: print current scores\n' \
                '/used: print all used words\n' \
                '/rules: правила игры\n' \
-               '/set turns <number>: set game duration in turns (default is 20)'
+               '/set turns <number>: set game duration in turns (default is 10)'
 
     @staticmethod
     def rules():
@@ -58,11 +66,14 @@ class Words:
         if self.long_word is None:
             self.message = "You should start a new game before entering words!"
             return
+        if self.over:
+            self.message = "Current game is over, you can view scores or start a new one"
+            return
         next_user = None
         if user not in self.scores:
             if self.can_add_user:
                 self.users.append(user)
-                self.scores[user] = 0
+                self.scores[user] = UserData()
             else:
                 self.message = "I'm sorry, but it seems that the game " \
                                "is already in progress now. If you want to " \
@@ -81,7 +92,7 @@ class Words:
                     "Not so fast, " + self.readable_name(user) + "! " + \
                     "Now it is " + self.readable_name(self.users[next_user]) + "'s turn!"
                 return
-            elif self.scores[user] > 0:
+            elif self.scores[user].turns > 0:
                 # some existing user is making his second turn, cannot add more users
                 self.can_add_user = False
 
@@ -97,10 +108,15 @@ class Words:
                 valid = False
                 break
         if valid:
+            data = self.scores[user]
             self.words.append(word)
-            self.scores[user] += len(word)
+            data.score += len(word)
             self.message = self.long_word + ": OK, added '" +\
                            word + "' (" + str(len(word)) + ")"
+            data.turns += 1
+            # last user, last turn
+            if data.turns == self.max_turns and data.index == len(self.scores) - 1:
+                self.over = True
             if next_user is not None:
                 self.current_user = next_user
         else:
@@ -108,8 +124,8 @@ class Words:
 
     def get_scores(self):
         self.message = ''
-        for user, score in self.scores.items():
-            self.message += self.readable_name(user) + ': ' + str(score) + '\n'
+        for user, data in self.scores.items():
+            self.message += self.readable_name(user) + ': ' + str(data.score) + '\n'
         return self.message
 
     def get_words(self):
@@ -191,6 +207,8 @@ def word(bot, update, args):
         words = chats[update.message.chat_id]
         words.add_word(param, update.message.from_user)
         bot.send_message(chat_id=update.message.chat_id, text=words.message)
+        if words.over:
+            bot.send_message(chat_id=update.message.chat_id, text=words.get_scores())
     except KeyError:
         update.message.reply_text(
             "You should start a new game before entering words!")

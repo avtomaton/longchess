@@ -14,10 +14,17 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 
 
 class UserData:
-    def __init__(self, index):
+    def __init__(self, index, last_word=None):
         self.score = 0
         self.turns = 0
         self.index = index  # user index in round
+        self.last_word = last_word
+
+
+class PendingData:
+    def __init__(self, user, word):
+        self.user = user
+        self.word = word
 
 
 class Words:
@@ -34,6 +41,7 @@ class Words:
         self.can_add_user = True
         self.current_user = -1
         self.over = False
+        self.pending_data = None
 
     @staticmethod
     def readable_name(user):
@@ -47,7 +55,11 @@ class Words:
         return '/game <word>: start a new game\n' \
                '/word <word>: new word\n' \
                '/слово <слово>: предложить слово\n' \
-               '/с <слово>: предложить слово\n' \
+               '/c <слово>: предложить слово\n' \
+               '/approve: agree with the last word\n' \
+               '/да: есть такое слово\n' \
+               '/decline: do not agree with the last word\n' \
+               '/нет: такого слова нет!\n' \
                '/scores: print current scores\n' \
                '/used: print all used words\n' \
                '/rules: правила игры\n' \
@@ -69,7 +81,6 @@ class Words:
         if self.over:
             self.message = "Current game is over, you can view scores or start a new one"
             return
-        next_user = None
         if user not in self.users:
             if self.can_add_user:
                 self.user_list.append(user)
@@ -108,18 +119,46 @@ class Words:
                 valid = False
                 break
         if valid:
-            self.words.append(word)
-            data = self.users[user]
-            data.score += len(word)
-            data.turns += 1
-            self.message = self.long_word + ": OK, added '" +\
-                           word + "' (" + str(len(word)) + ")"
-            # last user, last turn
-            if data.turns == self.max_turns and data.index == len(self.users) - 1:
-                self.over = True
-            self.current_user = self.users[user].index
+            self.pending_data = PendingData(user, word)
+            self.message = "OK, waiting for somebody else's approve"
         else:
             self.message = "'" + word + "' cannot be used"
+
+    def approve_word(self, user):
+        if self.pending_data is None:
+            self.message = 'Nothing to approve'
+            return
+
+        data = self.users[self.pending_data.user]
+        if user not in self.users and data.turns > 0:
+            self.message = "You do not play this game and cannot approve words"
+            return
+
+        if user == self.pending_data.user:
+            self.message = "Somebody else should approve your word"
+            return
+
+        word = self.pending_data.word
+        self.words.append(word)
+        data.score += len(word)
+        data.turns += 1
+        data.last_word = word
+        self.message = self.long_word + ": OK, added '" + \
+                       word + "' (" + str(len(word)) + ")"
+        # last user, last turn
+        if data.turns == self.max_turns and data.index == len(self.users) - 1:
+            self.over = True
+        self.current_user = data.index
+
+        self.pending_data = None
+
+    def decline_word(self):
+        if self.pending_data is None:
+            self.message = 'Nothing to decline'
+            return
+
+        self.pending_data = None
+        self.message = "Disregarding the last word"
 
     def get_scores(self):
         self.message = ''
@@ -215,6 +254,30 @@ def word(bot, update, args):
         update.message.reply_text("Usage: /word <word>")
 
 
+def approve(bot, update):
+    global chats
+    try:
+        words = chats[update.message.chat_id]
+        words.approve_word(update.message.from_user)
+        bot.send_message(chat_id=update.message.chat_id, text=words.message)
+        if words.over:
+            bot.send_message(chat_id=update.message.chat_id, text=words.get_scores())
+    except KeyError:
+        update.message.reply_text(
+            "You should start a new game before entering words!")
+
+
+def decline(bot, update):
+    global chats
+    try:
+        words = chats[update.message.chat_id]
+        words.decline_word()
+        bot.send_message(chat_id=update.message.chat_id, text=words.message)
+    except KeyError:
+        update.message.reply_text(
+            "You should start a new game before entering words!")
+
+
 def scores(bot, update):
     global chats
     try:
@@ -263,6 +326,10 @@ handlers = [CommandHandler('start', start),
             CommandHandler('слово', word, pass_args=True),
             CommandHandler('с', word, pass_args=True),
             CommandHandler('c', word, pass_args=True),
+            CommandHandler('approve', approve),
+            CommandHandler('да', approve),
+            CommandHandler('decline', decline),
+            CommandHandler('нет', decline),
             CommandHandler('scores', scores),
             CommandHandler('used', used_words),
             CommandHandler('rules', rules),

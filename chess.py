@@ -14,10 +14,10 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 
 
 class UserData:
-    def __init__(self):
+    def __init__(self, index):
         self.score = 0
         self.turns = 0
-        self.index = 0  # user index in round
+        self.index = index  # user index in round
 
 
 class Words:
@@ -29,8 +29,8 @@ class Words:
         self.long_word = long_word
         self.words = []
         self.message = '0_o'
-        self.users = []
-        self.scores = {}  # telegram.User : UserData
+        self.user_list = []
+        self.users = {}  # telegram.User : UserData
         self.can_add_user = True
         self.current_user = -1
         self.over = False
@@ -70,10 +70,10 @@ class Words:
             self.message = "Current game is over, you can view scores or start a new one"
             return
         next_user = None
-        if user not in self.scores:
+        if user not in self.users:
             if self.can_add_user:
-                self.users.append(user)
-                self.scores[user] = UserData()
+                self.user_list.append(user)
+                self.users[user] = UserData(len(self.users))
             else:
                 self.message = "I'm sorry, but it seems that the game " \
                                "is already in progress now. If you want to " \
@@ -81,18 +81,18 @@ class Words:
                 return
         else:
             # somebody made a turn, we should check turns order
-            next_user = (self.current_user + 1) % len(self.users)
-            if len(self.users) == 1 and self.current_user == 0:
+            next_user = (self.current_user + 1) % len(self.user_list)
+            if len(self.user_list) == 1 and self.current_user == 0:
                 # only one user, and he has already made a turn
                 self.message = "Single player is not supported yet, " \
                                "somebody else should make a turn "
                 return
-            elif user != self.users[next_user]:
+            elif user != self.user_list[next_user]:
                 self.message = \
                     "Not so fast, " + self.readable_name(user) + "! " + \
-                    "Now it is " + self.readable_name(self.users[next_user]) + "'s turn!"
+                    "Now it is " + self.readable_name(self.user_list[next_user]) + "'s turn!"
                 return
-            elif self.scores[user].turns > 0:
+            elif self.users[user].turns > 0:
                 # some existing user is making his second turn, cannot add more users
                 self.can_add_user = False
 
@@ -108,23 +108,22 @@ class Words:
                 valid = False
                 break
         if valid:
-            data = self.scores[user]
             self.words.append(word)
+            data = self.users[user]
             data.score += len(word)
+            data.turns += 1
             self.message = self.long_word + ": OK, added '" +\
                            word + "' (" + str(len(word)) + ")"
-            data.turns += 1
             # last user, last turn
-            if data.turns == self.max_turns and data.index == len(self.scores) - 1:
+            if data.turns == self.max_turns and data.index == len(self.users) - 1:
                 self.over = True
-            if next_user is not None:
-                self.current_user = next_user
+            self.current_user = self.users[user].index
         else:
             self.message = "'" + word + "' cannot be used"
 
     def get_scores(self):
         self.message = ''
-        for user, data in self.scores.items():
+        for user, data in self.users.items():
             self.message += self.readable_name(user) + ': ' + str(data.score) + '\n'
         return self.message
 

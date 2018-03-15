@@ -67,6 +67,7 @@ class Words:
                '/c <слово>: предложить слово\n' \
                '/да: есть такое слово\n' \
                '/нет: такого слова нет!\n' \
+               '/склероз: напомнить изначальное слово\n' \
                '/счёт: текущий счёт\n' \
                '/список: вывести все уже использованные слова\n' \
                '/правила: правила игры\n' \
@@ -79,6 +80,7 @@ class Words:
                '/c <word>: new word\n' \
                '/approve: agree with the last word\n' \
                '/decline: do not agree with the last word\n' \
+               '/remind: remind initial word\n' \
                '/scores: print current scores\n' \
                '/used: print all used words\n' \
                '/rules: game rules\n' \
@@ -111,6 +113,10 @@ class Words:
         if self.over:
             self.message = "Current game is over, you can view scores or start a new one"
             return
+        if word == self.long_word:
+            self.message = "Cannot score the initial long word"
+            return
+
         if user not in self.users:
             if self.can_add_user:
                 self.user_list.append(user)
@@ -286,7 +292,7 @@ def game(bot, update, args):
     try:
         param = command_arg(update.message.text, args, 0)
         chats[update.message.chat_id][1] = Words(param)
-        words = chats[update.message.chat_id]
+        words = chats[update.message.chat_id][1]
         if get_language(update) == 'ru':
             text = "Начнём же! Ваше слово '" + words.long_word + "'"
         else:
@@ -294,6 +300,17 @@ def game(bot, update, args):
         bot.send_message(chat_id=update.message.chat_id, text=text)
     except (IndexError, ValueError):
         update.message.reply_text("Usage: /game <word>")
+
+
+def remind_long_word(bot, update):
+    global chats
+
+    try:
+        words = chats[update.message.chat_id][1]
+        bot.send_message(chat_id=update.message.chat_id, text=words.long_word)
+    except (KeyError, IndexError):
+        update.message.reply_text(
+            "You should start a new game before getting a word!")
 
 
 def set_game_param(bot, update, args):
@@ -417,6 +434,8 @@ handlers = [CommandHandler('start', start),
             CommandHandler('список', used_words),
             CommandHandler('rules', rules),
             CommandHandler('правила', rules),
+            CommandHandler('remind', remind_long_word),
+            CommandHandler('склероз', remind_long_word),
             CommandHandler('set', set_game_param, pass_args=True),
             MessageHandler(Filters.command, unknown_command),
             MessageHandler(Filters.entity('mention'), mention),

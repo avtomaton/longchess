@@ -31,7 +31,8 @@ class Words:
     params_list = ['turns']
 
     def __init__(self, long_word=None):
-        self.max_turns = 10
+        self.max_turns = 5
+        self.lang = 'ru'
 
         self.long_word = long_word
         self.words = []
@@ -50,29 +51,54 @@ class Words:
         else:
             return str(user.id)
 
-    @staticmethod
-    def telegram_help():
-        return '/game <word>: start a new game\n' \
-               '/word <word>: new word\n' \
-               '/слово <слово>: предложить слово\n' \
-               '/c <слово>: предложить слово\n' \
-               '/approve: agree with the last word\n' \
-               '/да: есть такое слово\n' \
-               '/decline: do not agree with the last word\n' \
-               '/нет: такого слова нет!\n' \
-               '/scores: print current scores\n' \
-               '/used: print all used words\n' \
-               '/rules: правила игры\n' \
-               '/set turns <number>: set game duration in turns (default is 10)'
+    def telegram_help(self):
+        if self.lang == 'ru':
+            return Words.telegram_help_ru()
+        else:
+            return Words.telegram_help_en()
 
     @staticmethod
-    def rules():
+    def telegram_help_ru():
+        return '/игра <слово>: начать новую игру\n' \
+               '/слово <слово>: предложить слово\n' \
+               '/c <слово>: предложить слово\n' \
+               '/да: есть такое слово\n' \
+               '/нет: такого слова нет!\n' \
+               '/счёт: текущий счёт\n' \
+               '/список: вывести все уже использованные слова\n' \
+               '/правила: правила игры\n' \
+               '/set turns <number>: установить кол-во ходов игры (5 по умолчанию)'
+
+    @staticmethod
+    def telegram_help_en():
+        return '/game <word>: start a new game\n' \
+               '/word <word>: new word\n' \
+               '/c <word>: new word\n' \
+               '/approve: agree with the last word\n' \
+               '/decline: do not agree with the last word\n' \
+               '/scores: print current scores\n' \
+               '/used: print all used words\n' \
+               '/rules: game rules\n' \
+               '/set turns <number>: set game duration in turns (default is 5)'
+
+    @staticmethod
+    def rules_ru():
         return 'Правила игры:\n' \
                'Смысл игры заключается в составлении слов из букв ' \
                'некого изначального (желательно длинного) слова.\n' \
                'Игроки ходят по очереди, предлагая свои слова. ' \
                'Очки за ход начисляются по количеству букв в предложенном ' \
-               'игроком слове.'
+               'игроком слове. Разрешается использовать только существительные, ' \
+               'нарицательные.'
+
+    @staticmethod
+    def rules_en():
+        text = 'I am sorry, but rules in English are not available now. ' \
+               'Nevertheless, I suggest you Russian version. ' \
+               'I hope that you are playing with your Russian friend, ' \
+               'and he/she can explain them to you =)\n'
+        text += Words.rules_ru()
+        return text
 
     def add_word(self, word, user):
         if self.long_word is None:
@@ -146,7 +172,7 @@ class Words:
         self.message = self.long_word + ": OK, added '" + \
                        word + "' (" + str(len(word)) + ")"
         # last user, last turn
-        if data.turns == self.max_turns and data.index == len(self.users) - 1:
+        if data.turns >= self.max_turns and data.index == len(self.users) - 1:
             self.over = True
         self.current_user = data.index
 
@@ -178,7 +204,13 @@ class Words:
         return self.message
 
 
+# chat_id : (BotSettings, game)
 chats = {}
+
+
+class BotSettings:
+    def __init__(self):
+        self.lang = 'ru'
 
 
 def command_arg(text, args, index):
@@ -191,32 +223,71 @@ def command_arg(text, args, index):
     return param
 
 
-def need_help(bot, update):
-    bot.send_message(chat_id=update.message.chat_id,
-                     text='/start: start talking/gaming with me\n'
-                          '/help: print this message\n'
-                          + Words.telegram_help() +
-                          '\nOr just text me, I am very friendly')
+def get_language(update):
+    global chats
+    try:
+        if chats[update.message.chat_id][0].lang == 'ru':
+            return 'ru'
+        else:
+            return 'en'
+    except (IndexError, ValueError):
+        pass
 
-
-def rules(bot, update):
-    bot.send_message(chat_id=update.message.chat_id, text=Words.rules())
+    return 'ru'
 
 
 def start(bot, update):
-    bot.send_message(chat_id=update.message.chat_id,
-                     text="Hey there, let's talk!")
+    global chats
+    chats[update.message.chat_id] = (BotSettings(), None)
+    if get_language(update) == 'ru':
+        text = 'Отлично! Играем?'
+    else:
+        text = "Hey there, let's talk!"
+        bot.send_message(chat_id=update.message.chat_id, text=Words.rules_en())
+    bot.send_message(chat_id=update.message.chat_id, text=text)
     need_help(bot, update)
+
+
+def need_help(bot, update):
+    if get_language(update) == 'ru':
+        text = '/start: начать разговор/игру\n' \
+               '/help: подсказка'
+        text += Words.telegram_help_ru()
+        text += '\nИли просто напишите мне, я довольно дружелюбный'
+    else:
+        text = '/start: start talking/gaming with me\n' \
+               '/help: print this message\n'
+        text += Words.telegram_help_en()
+        text += '\nOr just text me, I am very friendly'
+
+    bot.send_message(chat_id=update.message.chat_id, text=text)
+
+
+def rules(bot, update):
+    if get_language(update) == 'ru':
+        bot.send_message(chat_id=update.message.chat_id, text=Words.rules_ru())
+    else:
+        bot.send_message(chat_id=update.message.chat_id, text=Words.rules_en())
 
 
 def game(bot, update, args):
     global chats
+
+    # create chat with parameters if it does not exist
+    try:
+        w = chats[update.message.chat_id][1]
+    except IndexError:
+        chats[update.message.chat_id] = (BotSettings(), None)
+
     try:
         param = command_arg(update.message.text, args, 0)
-        chats[update.message.chat_id] = Words(param)
+        chats[update.message.chat_id][1] = Words(param)
         words = chats[update.message.chat_id]
-        bot.send_message(chat_id=update.message.chat_id,
-                         text="Let's rock! We use word '" + words.long_word + "'")
+        if get_language(update) == 'ru':
+            text = "Начнём же! Ваше слово '" + words.long_word + "'"
+        else:
+            text = "Let's rock! We use word '" + words.long_word + "'"
+        bot.send_message(chat_id=update.message.chat_id, text=text)
     except (IndexError, ValueError):
         update.message.reply_text("Usage: /game <word>")
 
@@ -226,7 +297,7 @@ def set_game_param(bot, update, args):
         param = command_arg(update.message.text, args, 0)
         if param not in Words.params_list:
             raise IndexError
-        words = chats[update.message.chat_id]
+        words = chats[update.message.chat_id][1]
         param = command_arg(update.message.text, args, 1)
         words.set_turns(param)
         bot.send_message(chat_id=update.message.chat_id, text=words.message)
@@ -242,7 +313,7 @@ def word(bot, update, args):
     global chats
     try:
         param = command_arg(update.message.text, args, 0)
-        words = chats[update.message.chat_id]
+        words = chats[update.message.chat_id][1]
         words.add_word(param, update.message.from_user)
         bot.send_message(chat_id=update.message.chat_id, text=words.message)
         if words.over:
@@ -257,7 +328,7 @@ def word(bot, update, args):
 def approve(bot, update):
     global chats
     try:
-        words = chats[update.message.chat_id]
+        words = chats[update.message.chat_id][1]
         words.approve_word(update.message.from_user)
         bot.send_message(chat_id=update.message.chat_id, text=words.message)
         if words.over:
@@ -270,7 +341,7 @@ def approve(bot, update):
 def decline(bot, update):
     global chats
     try:
-        words = chats[update.message.chat_id]
+        words = chats[update.message.chat_id][1]
         words.decline_word()
         bot.send_message(chat_id=update.message.chat_id, text=words.message)
     except KeyError:
@@ -281,7 +352,7 @@ def decline(bot, update):
 def scores(bot, update):
     global chats
     try:
-        words = chats[update.message.chat_id]
+        words = chats[update.message.chat_id][1]
         bot.send_message(chat_id=update.message.chat_id, text=words.get_scores())
     except KeyError:
         update.message.reply_text(
@@ -291,7 +362,7 @@ def scores(bot, update):
 def used_words(bot, update):
     global chats
     try:
-        words = chats[update.message.chat_id]
+        words = chats[update.message.chat_id][1]
         bot.send_message(chat_id=update.message.chat_id, text=words.get_words())
     except KeyError:
         update.message.reply_text(
@@ -311,7 +382,11 @@ def hashtag(bot, update):
 
 
 def unknown_command(bot, update):
-    bot.send_message(chat_id=update.message.chat_id, text="Sorry, I didn't understand that command.")
+    if get_language(update) == 'ru':
+        text = "Извините, но я не понимаю, что вы от меня хотите"
+    else:
+        text = "Sorry, I didn't understand that command."
+    bot.send_message(chat_id=update.message.chat_id, text=text)
 
 
 def error(bot, update, error):
@@ -322,6 +397,7 @@ def error(bot, update, error):
 handlers = [CommandHandler('start', start),
             CommandHandler('help', need_help),
             CommandHandler('game', game, pass_args=True),
+            CommandHandler('игра', game, pass_args=True),
             CommandHandler('word', word, pass_args=True),
             CommandHandler('слово', word, pass_args=True),
             CommandHandler('с', word, pass_args=True),
@@ -331,13 +407,17 @@ handlers = [CommandHandler('start', start),
             CommandHandler('decline', decline),
             CommandHandler('нет', decline),
             CommandHandler('scores', scores),
+            CommandHandler('счет', scores),
+            CommandHandler('счёт', scores),
             CommandHandler('used', used_words),
+            CommandHandler('список', used_words),
             CommandHandler('rules', rules),
+            CommandHandler('правила', rules),
             CommandHandler('set', set_game_param, pass_args=True),
             MessageHandler(Filters.command, unknown_command),
             MessageHandler(Filters.entity('mention'), mention),
-            MessageHandler(Filters.entity('hashtag'), hashtag),
-            MessageHandler(Filters.text, blah_blah)
+            MessageHandler(Filters.entity('hashtag'), hashtag)
+            # MessageHandler(Filters.text, blah_blah)
             ]
 
 dispatcher.add_error_handler(error)

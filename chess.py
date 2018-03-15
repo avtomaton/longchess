@@ -2,6 +2,8 @@ from telegram.ext import Updater
 from telegram.ext import CommandHandler
 from telegram.ext import MessageHandler
 from telegram.ext import Filters
+from telegram import KeyboardButton
+from telegram import ReplyKeyboardMarkup
 
 import logging
 
@@ -10,7 +12,25 @@ chess_token = open('telegram_token').readline().strip()
 updater = Updater(token=chess_token)
 dispatcher = updater.dispatcher
 
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+                    level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
+# ugly simplest translation solution
+# TODO: use gettext() instead
+# https://docs.python.org/3/library/gettext.html
+def _(s):
+    lang = 'ru'
+    russian_strings = {'Hello world!': 'Привет мир!'}
+    spanish_strings = {'Hello world!': 'Hola Mundo!'}
+
+    if lang == 'sp':
+        return spanish_strings[s]
+    elif lang == 'ru':
+        return russian_strings[s]
+    else:
+        return s
 
 
 class UserData:
@@ -33,6 +53,8 @@ class Words:
     def __init__(self, long_word=None):
         self.max_turns = 5
         self.lang = 'ru'
+        self.states = ['CLEAN', 'NEED_APPROVAL']
+        self.state = 'CLEAN'
 
         if long_word is not None:
             self.long_word = long_word.strip()
@@ -297,7 +319,9 @@ def game(bot, update, args):
             text = "Начнём же! Ваше слово '" + words.long_word + "'"
         else:
             text = "Let's rock! We use word '" + words.long_word + "'"
-        bot.send_message(chat_id=update.message.chat_id, text=text)
+        keyboard = [[KeyboardButton('word')]]
+        mk = ReplyKeyboardMarkup(keyboard)
+        bot.send_message(chat_id=update.message.chat_id, text=text, reply_markup=mk)
     except (IndexError, ValueError):
         update.message.reply_text("Usage: /game <word>")
 
@@ -337,8 +361,8 @@ def word(bot, update, args):
         words = chats[update.message.chat_id][1]
         words.add_word(param, update.message.from_user)
         bot.send_message(chat_id=update.message.chat_id, text=words.message)
-        if words.over:
-            bot.send_message(chat_id=update.message.chat_id, text=words.get_scores())
+        if words.pending_data:
+            pass
     except KeyError:
         update.message.reply_text(
             "You should start a new game before entering words!")

@@ -34,7 +34,10 @@ class Words:
         self.max_turns = 5
         self.lang = 'ru'
 
-        self.long_word = long_word
+        if long_word is not None:
+            self.long_word = long_word.strip()
+        else:
+            self.long_word = None
         self.words = []
         self.message = '0_o'
         self.user_list = []
@@ -101,6 +104,7 @@ class Words:
         return text
 
     def add_word(self, word, user):
+        word = word.strip()
         if self.long_word is None:
             self.message = "You should start a new game before entering words!"
             return

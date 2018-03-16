@@ -243,6 +243,7 @@ chats = {}
 class BotSettings:
     def __init__(self):
         self.lang = 'ru'
+        self.state = 'CLEAN'  # 'NEED_WORD' 'NEED_APPROVAL'
 
 
 def command_arg(text, args, index):
@@ -270,7 +271,7 @@ def get_language(update):
 
 def start(bot, update):
     global chats
-    chats[update.message.chat_id] = (BotSettings(), None)
+    chats[update.message.chat_id] = [BotSettings(), None]
     if get_language(update) == 'ru':
         text = 'Отлично! Играем?'
     else:
@@ -283,7 +284,7 @@ def start(bot, update):
 def need_help(bot, update):
     if get_language(update) == 'ru':
         text = '/start: начать разговор/игру\n' \
-               '/help: подсказка'
+               '/help: подсказка\n'
         text += Words.telegram_help_ru()
         text += '\nИли просто напишите мне, я довольно дружелюбный'
     else:
@@ -302,33 +303,56 @@ def rules(bot, update):
         bot.send_message(chat_id=update.message.chat_id, text=Words.rules_en())
 
 
-def game(bot, update, args):
-    global chats
+def game_menu_buttons(bot, update, text):
+    keyboard = [[KeyboardButton('/слово')]]
+    mk = ReplyKeyboardMarkup(keyboard)
+    bot.send_message(chat_id=update.message.chat_id, text=text, reply_markup=mk)
 
+
+def word_greeting(update):
+    if get_language(update) == 'ru':
+        text = "Замечательно! Итак, ваше слово:"
+    else:
+        text = "Splendid! Now type your word!"
+    return text
+
+
+def yes_or_no_buttons(bot, update):
+    keyboard = [[KeyboardButton('/да'), KeyboardButton('/нет')]]
+    mk = ReplyKeyboardMarkup(keyboard)
+    bot.send_message(chat_id=update.message.chat_id,
+                     text='Waiting for approval...', reply_markup=mk)
+
+
+def ensure_exists(update):
+    global chats
     # create chat with parameters if it does not exist
     try:
         w = chats[update.message.chat_id][1]
-    except IndexError:
-        chats[update.message.chat_id] = (BotSettings(), None)
+    except (KeyError, IndexError):
+        chats[update.message.chat_id] = [BotSettings(), None]
+
+
+def game(bot, update, args):
+    global chats
+    ensure_exists(update)
 
     try:
         param = command_arg(update.message.text, args, 0)
         chats[update.message.chat_id][1] = Words(param)
+        chats[update.message.chat_id][0].state = 'CLEAN'
         words = chats[update.message.chat_id][1]
         if get_language(update) == 'ru':
             text = "Начнём же! Ваше слово '" + words.long_word + "'"
         else:
             text = "Let's rock! We use word '" + words.long_word + "'"
-        keyboard = [[KeyboardButton('word')]]
-        mk = ReplyKeyboardMarkup(keyboard)
-        bot.send_message(chat_id=update.message.chat_id, text=text, reply_markup=mk)
+        game_menu_buttons(bot, update, text)
     except (IndexError, ValueError):
         update.message.reply_text("Usage: /game <word>")
 
 
 def remind_long_word(bot, update):
     global chats
-
     try:
         words = chats[update.message.chat_id][1]
         bot.send_message(chat_id=update.message.chat_id, text=words.long_word)
@@ -354,20 +378,40 @@ def set_game_param(bot, update, args):
                                   'before setting parameters!')
 
 
-def word(bot, update, args):
+def get_word(bot, update, word):
     global chats
     try:
-        param = command_arg(update.message.text, args, 0)
+        if chats[update.message.chat_id][0].state != 'NEED_WORD':
+            bot.send_message(chat_id=update.message.chat_id,
+                             text='Aargh! We do not wait word now!')
+            return
         words = chats[update.message.chat_id][1]
-        words.add_word(param, update.message.from_user)
+        words.add_word(word, update.message.from_user)
         bot.send_message(chat_id=update.message.chat_id, text=words.message)
         if words.pending_data:
-            pass
-    except KeyError:
+            chats[update.message.chat_id][0].state = 'NEED_APPROVAL'
+            yes_or_no_buttons(bot, update)
+    except (KeyError, AttributeError):
         update.message.reply_text(
             "You should start a new game before entering words!")
     except (IndexError, ValueError):
-        update.message.reply_text("Usage: /word <word>")
+        update.message.reply_text("It should never happen (2)")
+
+
+def word_command(bot, update, args):
+    global chats
+    ensure_exists(update)
+    try:
+        param = command_arg(update.message.text, args, 0)
+        chats[update.message.chat_id][0].state = 'NEED_WORD'
+        get_word(bot, update, param)
+    except (IndexError, ValueError):
+        try:
+            chats[update.message.chat_id][0].state = 'NEED_WORD'
+            bot.send_message(chat_id=update.message.chat_id, text=word_greeting(update))
+        except (IndexError, KeyError, AttributeError):
+            bot.send_message(chat_id=update.message.chat_id,
+                             text='It should never happen =(')
 
 
 def approve(bot, update):
@@ -375,9 +419,15 @@ def approve(bot, update):
     try:
         words = chats[update.message.chat_id][1]
         words.approve_word(update.message.from_user)
-        bot.send_message(chat_id=update.message.chat_id, text=words.message)
         if words.over:
+            chats[update.message.chat_id][0].state = 'CLEAN'
+            bot.send_message(chat_id=update.message.chat_id, text=words.message)
             bot.send_message(chat_id=update.message.chat_id, text=words.get_scores())
+        elif words.pending_data is None:
+            chats[update.message.chat_id][0].state = 'CLEAN'
+            game_menu_buttons(bot, update, words.message)
+        else:
+            bot.send_message(chat_id=update.message.chat_id, text=words.message)
     except KeyError:
         update.message.reply_text(
             "You should start a new game before entering words!")
@@ -388,7 +438,7 @@ def decline(bot, update):
     try:
         words = chats[update.message.chat_id][1]
         words.decline_word()
-        bot.send_message(chat_id=update.message.chat_id, text=words.message)
+        game_menu_buttons(bot, update, words.message)
     except KeyError:
         update.message.reply_text(
             "You should start a new game before entering words!")
@@ -415,7 +465,13 @@ def used_words(bot, update):
 
 
 def blah_blah(bot, update):
-    bot.send_message(chat_id=update.message.chat_id, text='blah-blah-blah')
+    global chats
+    try:
+        word = update.message.text.split()[0].strip()
+        if chats[update.message.chat_id][0].state == 'NEED_WORD':
+            get_word(bot, update, word)
+    except (KeyError, IndexError, AttributeError):
+        update.message.reply_text('nobody started me :(')
 
 
 def mention(bot, update):
@@ -443,10 +499,10 @@ handlers = [CommandHandler('start', start),
             CommandHandler('help', need_help),
             CommandHandler('game', game, pass_args=True),
             CommandHandler('игра', game, pass_args=True),
-            CommandHandler('word', word, pass_args=True),
-            CommandHandler('слово', word, pass_args=True),
-            CommandHandler('с', word, pass_args=True),
-            CommandHandler('c', word, pass_args=True),
+            CommandHandler('word', word_command, pass_args=True),
+            CommandHandler('слово', word_command, pass_args=True),
+            CommandHandler('с', word_command, pass_args=True),
+            CommandHandler('c', word_command, pass_args=True),
             CommandHandler('approve', approve),
             CommandHandler('да', approve),
             CommandHandler('decline', decline),
@@ -463,8 +519,8 @@ handlers = [CommandHandler('start', start),
             CommandHandler('set', set_game_param, pass_args=True),
             MessageHandler(Filters.command, unknown_command),
             MessageHandler(Filters.entity('mention'), mention),
-            MessageHandler(Filters.entity('hashtag'), hashtag)
-            # MessageHandler(Filters.text, blah_blah)
+            MessageHandler(Filters.entity('hashtag'), hashtag),
+            MessageHandler(Filters.text, blah_blah)
             ]
 
 dispatcher.add_error_handler(error)

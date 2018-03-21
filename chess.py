@@ -319,7 +319,7 @@ def rules(bot, update):
 
 def game_menu_buttons(bot, update, text):
     keyboard = [[KeyboardButton('/слово')]]
-    mk = ReplyKeyboardMarkup(keyboard)
+    mk = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     bot.send_message(chat_id=update.message.chat_id, text=text, reply_markup=mk)
 
 
@@ -333,7 +333,7 @@ def word_greeting(update):
 
 def yes_or_no_buttons(bot, update):
     keyboard = [[KeyboardButton('/да'), KeyboardButton('/нет')]]
-    mk = ReplyKeyboardMarkup(keyboard)
+    mk = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     bot.send_message(chat_id=update.message.chat_id,
                      text='Waiting for approval...', reply_markup=mk)
 

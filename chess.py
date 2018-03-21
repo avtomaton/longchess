@@ -57,7 +57,7 @@ class Words:
         self.state = 'CLEAN'
 
         if long_word is not None:
-            self.long_word = long_word.strip()
+            self.long_word = long_word.strip().lower()
         else:
             self.long_word = None
         self.words = []
@@ -128,7 +128,7 @@ class Words:
         return text
 
     def add_word(self, word, user):
-        word = word.strip()
+        word = word.strip().lower()
         if self.long_word is None:
             self.message = "You should start a new game before entering words!"
             return

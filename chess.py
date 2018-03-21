@@ -34,7 +34,15 @@ def _(s):
 
 
 class UserData:
-    def __init__(self, index, last_word=None):
+    last_id = 0
+
+    def __init__(self, name, index=0, id=None, last_word=None):
+        if id is not None:
+            self.id = id
+        else:
+            self.id = UserData.last_id + 1
+            UserData.last_id += 1
+        self.name = name
         self.score = 0
         self.turns = 0
         self.index = index  # user index in round
@@ -45,6 +53,10 @@ class PendingData:
     def __init__(self, user, word):
         self.user = user
         self.word = word
+
+
+class WrongUserError(RuntimeError):
+    pass
 
 
 class Words:
@@ -63,18 +75,11 @@ class Words:
         self.words = []
         self.message = '0_o'
         self.user_list = []
-        self.users = {}  # telegram.User : UserData
+        self.users = {}  # user id : UserData
         self.can_add_user = True
         self.current_user = -1
         self.over = False
         self.pending_data = None
-
-    @staticmethod
-    def readable_name(user):
-        if user.name:
-            return user.name
-        else:
-            return str(user.id)
 
     def telegram_help(self):
         if self.lang == 'ru':
@@ -127,7 +132,22 @@ class Words:
         text += Words.rules_ru()
         return text
 
-    def add_word(self, word, user):
+    def have_user(self, user_id):
+        if user_id in self.users:
+            return True
+        else:
+            return False
+
+    def add_user(self, user_id, user_name):
+        if not self.can_add_user:
+            raise WrongUserError("I'm sorry, but it seems that the game "
+                                 "is already in progress now. If you want to"
+                                 "join, consider starting a new game")
+
+        self.user_list.append(user_id)
+        self.users[user_id] = UserData(user_name, id=user_id, index=len(self.users))
+
+    def add_word(self, word, user_id):
         word = word.strip().lower()
         if self.long_word is None:
             self.message = "You should start a new game before entering words!"
@@ -139,31 +159,20 @@ class Words:
             self.message = "Cannot score the initial long word"
             return
 
-        if user not in self.users:
-            if self.can_add_user:
-                self.user_list.append(user)
-                self.users[user] = UserData(len(self.users))
-            else:
-                self.message = "I'm sorry, but it seems that the game " \
-                               "is already in progress now. If you want to " \
-                               "join, consider starting a new game"
-                return
-        else:
-            # somebody made a turn, we should check turns order
-            next_user = (self.current_user + 1) % len(self.user_list)
-            if len(self.user_list) == 1 and self.current_user == 0:
-                # only one user, and he has already made a turn
-                self.message = "Single player is not supported yet, " \
-                               "somebody else should make a turn "
-                return
-            elif user != self.user_list[next_user]:
-                self.message = \
-                    "Not so fast, " + self.readable_name(user) + "! " + \
-                    "Now it is " + self.readable_name(self.user_list[next_user]) + "'s turn!"
-                return
-            elif self.users[user].turns > 0:
-                # some existing user is making his second turn, cannot add more users
-                self.can_add_user = False
+        # somebody made a turn, we should check turns order
+        user = self.users[user_id]
+        next_user_idx = (self.current_user + 1) % len(self.user_list)
+        if len(self.user_list) == 1 and self.current_user == 0:
+            # only one user, and he has already made a turn
+            raise WrongUserError("Single player is not supported yet, "
+                                 "somebody else should make a turn ")
+        elif user_id != self.user_list[next_user_idx]:
+            raise WrongUserError("Not so fast, " + user.name + "! " +\
+                                 "Now it is " + self.users[self.user_list[next_user_idx]].name +\
+                                 "'s turn!")
+        elif user.turns > 0:
+            # some existing user is making his second turn, cannot add more users
+            self.can_add_user = False
 
         if word in self.words:
             self.message = "'" + word + "' was already used"
@@ -182,19 +191,17 @@ class Words:
         else:
             self.message = "'" + word + "' cannot be used"
 
-    def approve_word(self, user):
+    def approve_word(self, user_id):
         if self.pending_data is None:
             self.message = 'Nothing to approve'
             return
 
-        data = self.users[self.pending_data.user]
-        if user not in self.users and data.turns > 0:
-            self.message = "You do not play this game and cannot approve words"
-            return
+        data = self.users[self.pending_data.user.id]
+        if user_id not in self.users and data.turns > 0:
+            raise WrongUserError("You do not play this game and cannot approve words")
 
-        if user == self.pending_data.user:
-            self.message = "Somebody else should approve your word"
-            return
+        if user_id == self.pending_data.user.id:
+            raise WrongUserError("Somebody else should approve your word")
 
         word = self.pending_data.word
         self.words.append(word)
@@ -221,7 +228,7 @@ class Words:
     def get_scores(self):
         self.message = ''
         for user, data in self.users.items():
-            self.message += self.readable_name(user) + ': ' + str(data.score) + '\n'
+            self.message += data.name + ': ' + str(data.score) + '\n'
         return self.message
 
     def get_words(self):
@@ -244,6 +251,13 @@ class BotSettings:
     def __init__(self):
         self.lang = 'ru'
         self.state = 'CLEAN'  # 'NEED_WORD' 'NEED_APPROVAL'
+
+
+def readable_name(user):
+    if user.name:
+        return user.name
+    else:
+        return str(user.id)
 
 
 def command_arg(text, args, index):
@@ -325,12 +339,27 @@ def yes_or_no_buttons(bot, update):
 
 
 def ensure_exists(update):
+    """
+    Ensure that the chat was added to all active chats
+    :param update: telegram.Update object
+    """
     global chats
     # create chat with parameters if it does not exist
     try:
         w = chats[update.message.chat_id][1]
     except (KeyError, IndexError):
         chats[update.message.chat_id] = [BotSettings(), None]
+
+
+def game_is_started(update):
+    """
+    Check whether game was started or not
+    :param update: telegram.Update object
+    :return: True if game was started, False otherwise
+    """
+    global chats
+    w = chats[update.message.chat_id][1]
+    return w is not None
 
 
 def game(bot, update, args):
@@ -353,15 +382,23 @@ def game(bot, update, args):
 
 def remind_long_word(bot, update):
     global chats
-    try:
-        words = chats[update.message.chat_id][1]
-        bot.send_message(chat_id=update.message.chat_id, text=words.long_word)
-    except (KeyError, IndexError):
+    ensure_exists(update)
+    if not game_is_started(update):
         update.message.reply_text(
             "You should start a new game before getting a word!")
+        return
+
+    words = chats[update.message.chat_id][1]
+    bot.send_message(chat_id=update.message.chat_id, text=words.long_word)
 
 
 def set_game_param(bot, update, args):
+    ensure_exists(update)
+    if not game_is_started(update):
+        update.message.reply_text('Game was not started, please start it '
+                                  'before setting parameters!')
+        return
+
     try:
         param = command_arg(update.message.text, args, 0)
         if param not in Words.params_list:
@@ -373,9 +410,6 @@ def set_game_param(bot, update, args):
     except (IndexError, ValueError):
         update.message.reply_text("Wrong /set command format")
         need_help(bot, update)
-    except KeyError:
-        update.message.reply_text('Game was not started, please start it '
-                                  'before setting parameters!')
 
 
 def get_word(bot, update, word):
@@ -386,21 +420,36 @@ def get_word(bot, update, word):
                              text='Aargh! We do not wait word now!')
             return
         words = chats[update.message.chat_id][1]
-        words.add_word(word, update.message.from_user)
+        words.add_word(word, update.message.from_user.id)
         bot.send_message(chat_id=update.message.chat_id, text=words.message)
         if words.pending_data:
             chats[update.message.chat_id][0].state = 'NEED_APPROVAL'
             yes_or_no_buttons(bot, update)
+    except WrongUserError as e:
+        update.message.reply_text(str(e))
     except (KeyError, AttributeError):
-        update.message.reply_text(
-            "You should start a new game before entering words!")
-    except (IndexError, ValueError):
         update.message.reply_text("It should never happen (2)")
+    except (IndexError, ValueError):
+        update.message.reply_text("It should never happen (3)")
 
 
 def word_command(bot, update, args):
     global chats
     ensure_exists(update)
+    if not game_is_started(update):
+        update.message.reply_text(
+            "You should start a new game before entering words!")
+        return
+
+    words = chats[update.message.chat_id][1]
+    user = update.message.from_user
+    if not words.have_user(user.id):
+        try:
+            words.add_user(user.id, readable_name(user))
+        except WrongUserError as e:
+            update.message.reply_text(str(e))
+            return
+
     try:
         param = command_arg(update.message.text, args, 0)
         chats[update.message.chat_id][0].state = 'NEED_WORD'
@@ -416,9 +465,14 @@ def word_command(bot, update, args):
 
 def approve(bot, update):
     global chats
+    ensure_exists(update)
+    if not game_is_started(update):
+        update.message.reply_text("No any active game")
+        return
+
+    words = chats[update.message.chat_id][1]
     try:
-        words = chats[update.message.chat_id][1]
-        words.approve_word(update.message.from_user)
+        words.approve_word(update.message.from_user.id)
         if words.over:
             chats[update.message.chat_id][0].state = 'CLEAN'
             bot.send_message(chat_id=update.message.chat_id, text=words.message)
@@ -428,40 +482,42 @@ def approve(bot, update):
             game_menu_buttons(bot, update, words.message)
         else:
             bot.send_message(chat_id=update.message.chat_id, text=words.message)
-    except KeyError:
-        update.message.reply_text(
-            "You should start a new game before entering words!")
+    except WrongUserError as e:
+        update.message.reply_text(str(e))
 
 
 def decline(bot, update):
     global chats
-    try:
-        words = chats[update.message.chat_id][1]
-        words.decline_word()
-        game_menu_buttons(bot, update, words.message)
-    except KeyError:
-        update.message.reply_text(
-            "You should start a new game before entering words!")
+    ensure_exists(update)
+    if not game_is_started(update):
+        update.message.reply_text("No any active game")
+        return
+
+    words = chats[update.message.chat_id][1]
+    words.decline_word()
+    game_menu_buttons(bot, update, words.message)
 
 
 def scores(bot, update):
     global chats
-    try:
-        words = chats[update.message.chat_id][1]
-        bot.send_message(chat_id=update.message.chat_id, text=words.get_scores())
-    except KeyError:
-        update.message.reply_text(
-            "You should start a new game before checking scores!")
+    ensure_exists(update)
+    if not game_is_started(update):
+        update.message.reply_text("You should start a new game before checking scores!")
+        return
+
+    words = chats[update.message.chat_id][1]
+    bot.send_message(chat_id=update.message.chat_id, text=words.get_scores())
 
 
 def used_words(bot, update):
     global chats
-    try:
-        words = chats[update.message.chat_id][1]
-        bot.send_message(chat_id=update.message.chat_id, text=words.get_words())
-    except KeyError:
-        update.message.reply_text(
-            "You should start a new game before checking used words!")
+    ensure_exists(update)
+    if not game_is_started(update):
+        update.message.reply_text("You should start a new game before checking used words!")
+        return
+
+    words = chats[update.message.chat_id][1]
+    bot.send_message(chat_id=update.message.chat_id, text=words.get_words())
 
 
 def blah_blah(bot, update):
